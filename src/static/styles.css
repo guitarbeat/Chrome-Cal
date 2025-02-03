@@ -1,0 +1,160 @@
+/* Base styles */
+:root {
+  --primary: #4285f4;
+  --primary-dark: #1a73e8;
+  --text: #202124;
+  --text-secondary: #5f6368;
+  --background: #ffffff;
+  --border: #dadce0;
+  --shadow: rgba(60, 64, 67, 0.3);
+  --hover: #f8f9fa;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --primary: #8ab4f8;
+    --primary-dark: #669df6;
+    --text: #e8eaed;
+    --text-secondary: #9aa0a6;
+    --background: #202124;
+    --border: #3c4043;
+    --shadow: rgba(0, 0, 0, 0.3);
+    --hover: #303134;
+  }
+}
+
+body {
+  width: 320px;
+  margin: 0;
+  padding: 16px;
+  font-family: 'Roboto', system-ui, -apple-system, sans-serif;
+  background: var(--background);
+  color: var(--text);
+}
+
+/* Event display */
+#selectedEvent {
+  font-size: 16px;
+  font-weight: 500;
+  margin-bottom: 16px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--hover);
+  border: 1px solid var(--border);
+}
+
+/* Energy slider */
+.slider-container {
+  margin: 20px 0;
+}
+
+#energySlider {
+  width: 100%;
+  height: 4px;
+  -webkit-appearance: none;
+  background: var(--border);
+  border-radius: 2px;
+  outline: none;
+}
+
+#energySlider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--primary);
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 2px 4px var(--shadow);
+  transition: transform 0.2s;
+}
+
+#energySlider::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+}
+
+#energyValue {
+  text-align: center;
+  font-size: 18px;
+  margin: 8px 0;
+  color: var(--primary);
+}
+
+/* Toggle switches */
+.toggle-container {
+  display: flex;
+  align-items: center;
+  margin: 12px 0;
+  padding: 8px;
+  border-radius: 8px;
+  transition: background-color 0.2s;
+}
+
+.toggle-container:hover {
+  background: var(--hover);
+}
+
+.toggle-container label {
+  flex-grow: 1;
+  cursor: pointer;
+}
+
+.toggle {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 24px;
+}
+
+.toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--border);
+  transition: .4s;
+  border-radius: 24px;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 4px;
+  bottom: 4px;
+  background-color: var(--background);
+  transition: .4s;
+  border-radius: 50%;
+}
+
+input:checked + .toggle-slider {
+  background-color: var(--primary);
+}
+
+input:checked + .toggle-slider:before {
+  transform: translateX(16px);
+}
+
+/* Time input */
+#morningTime {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--background);
+  color: var(--text);
+  margin-left: 8px;
+}
+
+#morningTime:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+} 

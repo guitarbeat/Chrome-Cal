@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Calendar Energy Tracker</title>
+  <style>
+    :root {
+      --primary-color: #4285f4;
+      --primary-hover: #357abd;
+      --background: #ffffff;
+      --surface: #f8f9fa;
+      --text-primary: #1a1a1a;
+      --text-secondary: #666666;
+      --border-color: #e0e0e0;
+      --shadow-color: rgba(0, 0, 0, 0.1);
+      --transition: all 0.2s ease;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --primary-color: #4285f4;
+        --primary-hover: #5c9aff;
+        --background: #1a1a1a;
+        --surface: #2d2d2d;
+        --text-primary: #ffffff;
+        --text-secondary: #b0b0b0;
+        --border-color: #404040;
+        --shadow-color: rgba(0, 0, 0, 0.3);
+      }
+    }
+
+    body {
+      width: 320px;
+      margin: 0;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+      background: var(--background);
+      color: var(--text-primary);
+      transition: var(--transition);
+    }
+    
+    .container {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      background: var(--surface);
+      padding: 20px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px var(--shadow-color);
+    }
+    
+    #selectedEvent {
+      font-size: 15px;
+      color: var(--text-secondary);
+      margin-bottom: 5px;
+      word-wrap: break-word;
+      line-height: 1.4;
+    }
+    
+    .slider-container {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 10px 0;
+    }
+    
+    #energySlider {
+      width: 100%;
+      height: 6px;
+      -webkit-appearance: none;
+      appearance: none;
+      background: var(--border-color);
+      border-radius: 3px;
+      outline: none;
+      transition: var(--transition);
+    }
+    
+    #energySlider::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      appearance: none;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: var(--primary-color);
+      cursor: pointer;
+      border: 2px solid var(--background);
+      box-shadow: 0 2px 4px var(--shadow-color);
+      transition: var(--transition);
+    }
+    
+    #energySlider::-webkit-slider-thumb:hover {
+      transform: scale(1.1);
+    }
+    
+    #energyValue {
+      font-size: 15px;
+      color: var(--text-primary);
+      text-align: center;
+      font-weight: 500;
+    }
+    
+    button {
+      padding: 10px 20px;
+      background-color: var(--primary-color);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 15px;
+      font-weight: 500;
+      transition: var(--transition);
+      box-shadow: 0 2px 4px var(--shadow-color);
+    }
+    
+    button:disabled {
+      background-color: var(--border-color);
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+    
+    button:hover:not(:disabled) {
+      background-color: var(--primary-hover);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 8px var(--shadow-color);
+    }
+    
+    button:active:not(:disabled) {
+      transform: translateY(0);
+      box-shadow: 0 2px 4px var(--shadow-color);
+    }
+    
+    .toggle-container {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 0;
+    }
+    
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 24px;
+      flex-shrink: 0;
+    }
+    
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+    
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: var(--border-color);
+      transition: var(--transition);
+      border-radius: 24px;
+    }
+    
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 20px;
+      width: 20px;
+      left: 2px;
+      bottom: 2px;
+      background-color: white;
+      transition: var(--transition);
+      border-radius: 50%;
+      box-shadow: 0 2px 4px var(--shadow-color);
+    }
+    
+    input:checked + .slider {
+      background-color: var(--primary-color);
+    }
+    
+    input:checked + .slider:before {
+      transform: translateX(20px);
+    }
+    
+    input:focus + .slider {
+      box-shadow: 0 0 1px var(--primary-color);
+    }
+    
+    #message {
+      font-size: 14px;
+      text-align: center;
+      min-height: 20px;
+      color: var(--text-secondary);
+    }
+
+    .settings-section {
+      border-top: 1px solid var(--border-color);
+      padding-top: 20px;
+      margin-top: 10px;
+    }
+
+    .time-input {
+      width: 100px;
+      padding: 8px;
+      margin-left: 10px;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      background: var(--background);
+      color: var(--text-primary);
+      font-size: 14px;
+      transition: var(--transition);
+    }
+
+    .time-input:focus {
+      outline: none;
+      border-color: var(--primary-color);
+      box-shadow: 0 0 0 2px rgba(66, 133, 244, 0.2);
+    }
+
+    .toggle-label {
+      font-size: 14px;
+      color: var(--text-primary);
+      user-select: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div id="selectedEvent">Select an event in Google Calendar</div>
+
+    <div class="slider-container">
+      <input type="range" id="energySlider" min="-5" max="5" value="0" step="1">
+      <div id="energyValue">Neutral (0)</div>
+    </div>
+
+    <button id="saveButton" disabled>Save Energy Level</button>
+    
+    <div class="toggle-container">
+      <label class="toggle-switch">
+        <input type="checkbox" id="ghostingToggle">
+        <span class="slider"></span>
+      </label>
+      <span class="toggle-label">Ghost Future Events</span>
+    </div>
+    
+    <div class="settings-section">
+      <div class="toggle-container">
+        <label class="toggle-switch">
+          <input type="checkbox" id="hideMornings">
+          <span class="slider"></span>
+        </label>
+        <span class="toggle-label">Hide Morning Events Until</span>
+        <input type="time" id="hideMorningsTime" class="time-input" value="08:00">
+      </div>
+    </div>
+
+    <div id="message"></div>
+  </div>
+
+  <script src="popup-bundle.js"></script>
+</body>
+</html> 

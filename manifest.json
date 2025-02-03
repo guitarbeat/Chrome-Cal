@@ -1,0 +1,48 @@
+{
+  "manifest_version": 3,
+  "name": "Calendar Energy Tracker",
+  "version": "1.0",
+  "description": "Track and manage your energy levels for Google Calendar events",
+  "permissions": [
+    "storage",
+    "tabs",
+    "scripting",
+    "identity"
+  ],
+  "host_permissions": [
+    "https://calendar.google.com/*",
+    "https://www.googleapis.com/*"
+  ],
+  "oauth2": {
+    "client_id": "${GOOGLE_CLIENT_ID}",
+    "scopes": [
+      "https://www.googleapis.com/auth/calendar",
+      "https://www.googleapis.com/auth/calendar.events"
+    ]
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background-bundle.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://calendar.google.com/*"],
+      "js": ["content-bundle.js"],
+      "css": ["styles.css"]
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+} 
