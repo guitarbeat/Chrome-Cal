@@ -1,17 +1,19 @@
 const path = require('path');
 const CopyPlugin = require('copy-webpack-plugin');
+const TerserPlugin = require('terser-webpack-plugin');
+const CssMinimizerPlugin = require('css-minimizer-webpack-plugin');
+const CopyWebpackPlugin = require('copy-webpack-plugin');
 
 module.exports = {
   mode: 'development',
-  devtool: 'inline-source-map',
+  devtool: process.env.NODE_ENV === 'production' ? false : 'inline-source-map',
   entry: {
     background: './src/background.ts',
     content: './src/content.ts',
-    popup: './src/popup.ts'
   },
   output: {
-    path: path.resolve(__dirname, 'dist'),
-    filename: '[name]-bundle.js',
+    path: path.join(__dirname, 'dist'),
+    filename: 'static/[name]-bundle.js',
     clean: true
   },
   module: {
@@ -20,35 +22,49 @@ module.exports = {
         test: /\.tsx?$/,
         use: 'ts-loader',
         exclude: /node_modules/
+      },
+      {
+        test: /\.css$/,
+        use: ['style-loader', 'css-loader']
       }
     ]
   },
   resolve: {
-    extensions: ['.tsx', '.ts', '.js']
+    extensions: ['.ts', '.tsx', '.js'],
+    alias: {
+      '@': path.resolve(__dirname, 'src/')
+    }
   },
   plugins: [
-    new CopyPlugin({
+    new CopyWebpackPlugin({
       patterns: [
-        { 
-          from: 'manifest.json',
-          to: 'manifest.json'
-        },
-        { 
-          from: 'src/static/popup.html',
-          to: 'popup.html'
-        },
-        { 
-          from: 'src/static/styles.css',
-          to: 'styles.css'
-        },
-        {
-          from: 'src/static/icons',
-          to: 'icons'
-        }
+        { from: 'src/static', to: 'static' },
+        { from: 'manifest.json', to: '.' }
       ]
     })
   ],
   optimization: {
-    minimize: false
+    minimize: process.env.NODE_ENV === 'production',
+    minimizer: [
+      new TerserPlugin({
+        terserOptions: {
+          format: {
+            comments: false,
+          },
+        },
+        extractComments: false,
+      }),
+      new CssMinimizerPlugin(),
+    ],
+    splitChunks: {
+      chunks: 'all',
+      name: false
+    }
+  },
+  performance: {
+    hints: false
+  },
+  cache: {
+    type: 'filesystem'
   }
 }; 

@@ -1,0 +1,147 @@
+/**
+ * @file Popup Styles
+ * @description CSS for extension popup UI components
+ * @author Your Name
+ * @version 1.0.0
+ */
+
+/* Base popup structure */
+body {
+    width: 300px;
+    min-height: 200px;
+    padding: 16px;
+    font-family: 'Google Sans', Arial, sans-serif;
+    background: var(--background);
+    color: var(--text);
+    margin: 0;
+    box-sizing: border-box;
+}
+
+/* Main container layout */
+.container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* Toggle switch components */
+.toggle-container {
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: var(--hover);
+    transition: background 0.2s ease;
+}
+
+.toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    cursor: pointer;
+}
+
+/* Opacity slider controls */
+.slider-container {
+    padding: 12px;
+    border-radius: 8px;
+    background: var(--hover);
+}
+
+.slider-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+}
+
+.slider-text {
+    white-space: nowrap;
+}
+
+#ghostOpacity {
+    flex-grow: 1;
+}
+
+.slider-value {
+    min-width: 40px;
+    text-align: right;
+}
+
+/* Selected event display */
+.selected-event-container {
+    padding: 12px;
+    border-radius: 8px;
+    background: var(--hover);
+}
+
+.selected-event-title {
+    margin: 0 0 8px 0;
+    font-size: 14px;
+}
+
+.event-title {
+    font-weight: 500;
+    word-break: break-word;
+}
+
+/* Ghosted events list */
+.ghosted-events-container {
+    padding: 12px;
+    border-radius: 8px;
+    background: var(--hover);
+}
+
+.ghosted-events-list {
+    max-height: 200px;
+    overflow-y: auto;
+    margin-top: 8px;
+}
+
+.ghosted-events-list ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.ghosted-events-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 8px;
+    background: var(--background);
+    border-radius: 4px;
+    font-size: 13px;
+}
+
+.button-primary {
+    background: var(--primary);
+    color: white;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.2s ease;
+    width: 100%;
+}
+
+.button-primary:hover {
+    background: var(--primary-dark);
+}
+
+.button-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+.empty-state {
+    text-align: center;
+    color: var(--text-secondary);
+    font-size: 13px;
+    padding: 8px 0;
+} 

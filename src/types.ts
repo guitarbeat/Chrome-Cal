@@ -1,3 +1,10 @@
+/**
+ * @file Type Definitions
+ * @description Centralized type definitions for the extension
+ * @author Your Name
+ * @version 1.0.0
+ */
+
 // Global type augmentation
 declare global {
   interface Document {
@@ -5,16 +12,21 @@ declare global {
   }
 }
 
-// Basic event type
+/**
+ * Calendar event interface
+ * @interface CalendarEvent
+ */
 export interface CalendarEvent {
   id: string;
   title: string;
   startTime: string;
   endTime: string;
-  energy?: number;
 }
 
-// Extension state
+/**
+ * Extension state interface
+ * @interface ExtensionState
+ */
 export interface ExtensionState {
   isAuthorized: boolean;
   darkMode: boolean;
@@ -22,26 +34,41 @@ export interface ExtensionState {
   settings: {
     hideUntilTime?: string;
     ghostFutureEvents: boolean;
-  }
+    ghostedEvents: string[]; // Array of event titles that are ghosted
+    ghostEventOpacity: number; // Opacity level for ghosted events (0-100)
+  };
 }
 
 // Message types
-export type MessageType = 
-  | 'GET_STATE'
-  | 'UPDATE_STATE'
-  | 'AUTH_REQUIRED'
-  | 'UPDATE_EVENT'
-  | 'TOGGLE_GHOST'
-  | 'HIDE_MORNINGS';
+export type MessageType =
+  | "GET_STATE"
+  | "UPDATE_STATE"
+  | "AUTH_REQUIRED"
+  | "TOGGLE_GHOST"
+  | "HIDE_MORNINGS"
+  | "TOGGLE_EVENT_GHOST"
+  | "UPDATE_GHOST_OPACITY"
+  | "INIT_GAPI";
 
-export interface Message {
+export interface ToggleEventGhostPayload {
+  eventTitle?: string;
+  titles?: string[];
+  opacity?: number;
+}
+
+export interface InitGapiPayload {
+  clientId: string;
+  apiKey: string;
+}
+
+export interface Message<T = unknown> {
   type: MessageType;
-  payload?: any;
+  payload?: T;
 }
 
 export interface MessageResponse {
   success: boolean;
-  data?: any;
+  data?: unknown;
   error?: string;
 }
 
@@ -50,26 +77,28 @@ export type Nullable<T> = T | null;
 export type Optional<T> = T | undefined;
 
 // Function types
-export type ThrottleFunction = <T extends (...args: any[]) => any>(
+export type ThrottleFunction = <T extends (...args: unknown[]) => unknown>(
   func: T,
-  limit?: number
+  limit?: number,
 ) => (...args: Parameters<T>) => void;
 
 export type WaitForElementFunction = (
   selector: string,
-  timeout?: number
+  timeout?: number,
 ) => Promise<HTMLElement>;
 
 // Chrome utilities
 export interface ChromeUtils {
+  setCalendarIcon(): Promise<void>;
   getCurrentTab(): Promise<chrome.tabs.Tab>;
   isCalendarPage(url?: string): boolean;
   injectContentScriptIfNeeded(): Promise<void>;
   checkContentScript(): Promise<boolean>;
   getSelectedEvent(): Promise<CalendarEvent | null>;
   toggleGhosting(enabled: boolean): Promise<void>;
-  updateEventEmotion(eventTitle: string, emotion: string): Promise<void>;
   reloadCalendarTabs(): Promise<void>;
+  toggleEventGhost(eventTitle: string): Promise<void>;
+  openGoogleCalendar(): Promise<void>;
 }
 
 // DOM utilities
@@ -102,4 +131,32 @@ export interface EnergyLevel {
 
 export interface GoogleAuthToken {
   token: string;
-} 
+}
+
+export interface GoogleCalendarEvent {
+  id: string;
+  summary: string;
+  description?: string;
+  start: {
+    dateTime: string;
+    timeZone?: string;
+  };
+  end: {
+    dateTime: string;
+    timeZone?: string;
+  };
+  [key: string]: unknown;
+}
+
+// Add Gapi type
+export interface Gapi {
+  load: (module: string, callback: () => void) => void;
+  client: {
+    init: (config: {
+      apiKey: string;
+      clientId: string;
+      discoveryDocs: string[];
+      scope: string;
+    }) => Promise<void>;
+  };
+}

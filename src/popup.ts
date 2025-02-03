@@ -1,165 +1,165 @@
-import { ExtensionState, CalendarEvent } from './types';
+/**
+ * @file Popup UI Script
+ * @module popup
+ * @description Handles popup UI interactions and state synchronization
+ * @author Your Name
+ * @version 1.0.0
+ */
 
-// UI Elements
-const elements = {
-  selectedEvent: document.getElementById('selectedEvent') as HTMLDivElement,
-  energySlider: document.getElementById('energySlider') as HTMLInputElement,
-  energyValue: document.getElementById('energyValue') as HTMLDivElement,
-  ghostToggle: document.getElementById('ghostToggle') as HTMLInputElement,
-  morningToggle: document.getElementById('morningToggle') as HTMLInputElement,
-  morningTime: document.getElementById('morningTime') as HTMLInputElement
-};
+import { Message } from "./types";
 
-// UI Utilities
-const ui = {
-  formatEnergy(value: number): string {
-    const emoji = value < 0 ? '🔋' : value > 0 ? '⚡' : '⚖️';
-    const sign = value > 0 ? '+' : '';
-    return `${emoji} (${sign}${value})`;
-  },
-
-  updateEventDisplay(event: CalendarEvent | null): void {
-    if (!event) {
-      elements.selectedEvent.textContent = 'Select an event in Google Calendar';
-      elements.energySlider.disabled = true;
-      elements.energyValue.textContent = ui.formatEnergy(0);
-      return;
-    }
-
-    elements.selectedEvent.textContent = event.title;
-    elements.energySlider.disabled = false;
-    elements.energySlider.value = event.energy.toString();
-    elements.energyValue.textContent = ui.formatEnergy(event.energy);
-  },
-
-  updateSettings(settings: ExtensionState['settings']): void {
-    elements.ghostToggle.checked = settings.ghostFutureEvents;
-    elements.morningToggle.checked = !!settings.hideUntilTime;
-    elements.morningTime.disabled = !settings.hideUntilTime;
-    elements.morningTime.value = settings.hideUntilTime || '08:00';
-  }
-};
-
-// State management
-let state: ExtensionState = {
-  selectedEvent: null,
-  settings: {
-    ghostFutureEvents: false,
-    hideUntilTime: undefined
-  }
-};
-
-// Load state
-async function loadState(): Promise<void> {
-  const response = await chrome.runtime.sendMessage({ type: 'GET_STATE' });
-  if (response.success && response.data) {
-    state = response.data;
-    ui.updateEventDisplay(state.selectedEvent);
-    ui.updateSettings(state.settings);
-  }
+/**
+ * Safely get DOM element with error handling
+ * @param id - Element ID
+ * @throws Error if element not found
+ */
+function safeGetElement<T extends HTMLElement>(id: string): T {
+    const el = document.getElementById(id);
+    if (!el) throw new Error(`Element ${id} not found`);
+    return el as T;
 }
 
-// Event handlers
-elements.energySlider.addEventListener('input', async () => {
-  const energy = parseInt(elements.energySlider.value);
-  elements.energyValue.textContent = ui.formatEnergy(energy);
+// Get elements with null checks
+const ghostFutureEventsCheckbox = safeGetElement<HTMLInputElement>('ghostFutureEvents');
+const ghostOpacitySlider = safeGetElement<HTMLInputElement>('ghostOpacity');
+const opacityValueSpan = safeGetElement<HTMLSpanElement>('opacityValue');
+const toggleEventGhostButton = safeGetElement<HTMLButtonElement>('toggleEventGhost');
+const selectedEventTitleSpan = safeGetElement<HTMLSpanElement>('selectedEventTitle');
+const ghostedEventsList = safeGetElement<HTMLDivElement>('ghostedEvents');
 
-  if (state.selectedEvent) {
-    const updatedEvent = {
-      ...state.selectedEvent,
-      energy
-    };
+/**
+ * Load initial state from storage
+ */
+function loadInitialState() {
+    chrome.runtime.sendMessage({ type: 'GET_STATE' }, (response) => {
+        if (chrome.runtime.lastError) {
+            console.error('Connection error:', chrome.runtime.lastError);
+            return;
+        }
 
-    const response = await chrome.runtime.sendMessage({
-      type: 'UPDATE_EVENT',
-      payload: updatedEvent
+        if (response?.success) {
+            const state = response.data;
+            ghostFutureEventsCheckbox.checked = state.settings.ghostFutureEvents ?? false;
+            ghostOpacitySlider.value = String(state.settings.ghostEventOpacity ?? 50);
+            opacityValueSpan.textContent = `${state.settings.ghostEventOpacity}%`;
+
+            if (state.selectedEvent?.title) {
+                selectedEventTitleSpan.textContent = state.selectedEvent.title;
+                toggleEventGhostButton.disabled = false;
+            } else {
+                selectedEventTitleSpan.textContent = 'None';
+                toggleEventGhostButton.disabled = true;
+            }
+
+            updateGhostedEventsList(state.settings.ghostedEvents ?? []);
+        }
     });
+}
 
-    if (response.success) {
-      state.selectedEvent = updatedEvent;
-      
-      // Update the event in the calendar
-      const tab = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tab[0]?.id) {
-        chrome.tabs.sendMessage(tab[0].id, {
-          type: 'UPDATE_EVENT',
-          payload: updatedEvent
-        });
-      }
-    }
-  }
-});
-
-elements.ghostToggle.addEventListener('change', async () => {
-  const enabled = elements.ghostToggle.checked;
-  
-  const response = await chrome.runtime.sendMessage({
-    type: 'TOGGLE_GHOST',
-    payload: enabled
-  });
-
-  if (response.success) {
-    state.settings.ghostFutureEvents = enabled;
-    
-    // Update the calendar view
-    const tab = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tab[0]?.id) {
-      chrome.tabs.sendMessage(tab[0].id, {
+// Update ghost future events
+ghostFutureEventsCheckbox.addEventListener('change', () => {
+    chrome.runtime.sendMessage({
         type: 'TOGGLE_GHOST',
-        payload: enabled
-      });
-    }
-  }
+        payload: ghostFutureEventsCheckbox.checked
+    });
 });
 
-elements.morningToggle.addEventListener('change', async () => {
-  const enabled = elements.morningToggle.checked;
-  elements.morningTime.disabled = !enabled;
-  
-  const hideUntilTime = enabled ? elements.morningTime.value : undefined;
-  
-  const response = await chrome.runtime.sendMessage({
-    type: 'HIDE_MORNINGS',
-    payload: hideUntilTime
-  });
-
-  if (response.success) {
-    state.settings.hideUntilTime = hideUntilTime;
-    
-    // Update the calendar view
-    const tab = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (tab[0]?.id) {
-      chrome.tabs.sendMessage(tab[0].id, {
-        type: 'HIDE_MORNINGS',
-        payload: hideUntilTime
-      });
-    }
-  }
+// Update opacity
+ghostOpacitySlider.addEventListener('input', () => {
+    const opacity = parseInt(ghostOpacitySlider.value);
+    opacityValueSpan.textContent = `${opacity}%`;
+    chrome.runtime.sendMessage({
+        type: 'UPDATE_GHOST_OPACITY',
+        payload: opacity
+    });
 });
 
-elements.morningTime.addEventListener('change', async () => {
-  if (elements.morningToggle.checked) {
-    const hideUntilTime = elements.morningTime.value;
-    
-    const response = await chrome.runtime.sendMessage({
-      type: 'HIDE_MORNINGS',
-      payload: hideUntilTime
+// Toggle ghosting for selected event
+toggleEventGhostButton.addEventListener('click', () => {
+    chrome.runtime.sendMessage({ type: 'GET_STATE' }, (response) => {
+        if (chrome.runtime.lastError) {
+            console.error('Connection error:', chrome.runtime.lastError);
+            return;
+        }
+
+        if (response?.success && response.data?.selectedEvent) {
+            const eventTitle = response.data.selectedEvent.title;
+            chrome.runtime.sendMessage({
+                type: 'TOGGLE_EVENT_GHOST',
+                payload: { eventTitle }
+            });
+        }
+    });
+});
+
+// Enhanced event list updating
+function updateGhostedEventsList(events: string[]) {
+    ghostedEventsList.innerHTML = '';
+
+    if (events.length === 0) {
+        const emptyState = document.createElement('div');
+        emptyState.className = 'empty-state';
+        emptyState.textContent = 'No ghosted events';
+        ghostedEventsList.appendChild(emptyState);
+        return;
+    }
+
+    const list = document.createElement('ul');
+    events.forEach(eventTitle => {
+        const li = document.createElement('li');
+        
+        const titleSpan = document.createElement('span');
+        titleSpan.textContent = eventTitle;
+        
+        const removeButton = document.createElement('button');
+        removeButton.className = 'button-primary';
+        removeButton.textContent = 'Remove';
+        removeButton.addEventListener('click', () => {
+            chrome.runtime.sendMessage({
+                type: 'TOGGLE_EVENT_GHOST',
+                payload: { eventTitle }
+            });
+        });
+
+        li.append(titleSpan, removeButton);
+        list.appendChild(li);
     });
 
-    if (response.success) {
-      state.settings.hideUntilTime = hideUntilTime;
-      
-      // Update the calendar view
-      const tab = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tab[0]?.id) {
-        chrome.tabs.sendMessage(tab[0].id, {
-          type: 'HIDE_MORNINGS',
-          payload: hideUntilTime
-        });
-      }
-    }
-  }
+    ghostedEventsList.appendChild(list);
+}
+
+// Initialize after DOM load
+document.addEventListener('DOMContentLoaded', () => {
+    loadInitialState();
+    
+    // Add debounced resize handler
+    let resizeTimeout: number;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+            window.dispatchEvent(new Event('resize'));
+        }, 100);
+    });
 });
 
-// Initialize popup
-loadState(); 
+// Update message listener with error handling
+chrome.runtime.onMessage.addListener((message: Message) => {
+    if (!message) return;
+
+    if (message.type === 'UPDATE_STATE') {
+        const state = message.payload;
+        if (state?.settings) {
+            ghostFutureEventsCheckbox.checked = state.settings.ghostFutureEvents ?? false;
+            ghostOpacitySlider.value = String(state.settings.ghostEventOpacity ?? 50);
+            opacityValueSpan.textContent = `${state.settings.ghostEventOpacity}%`;
+            updateGhostedEventsList(state.settings.ghostedEvents ?? []);
+        }
+        if (state?.selectedEvent?.title) {
+            selectedEventTitleSpan.textContent = state.selectedEvent.title;
+            toggleEventGhostButton.disabled = false;
+        } else {
+            selectedEventTitleSpan.textContent = 'None';
+            toggleEventGhostButton.disabled = true;
+        }
+    }
+}); 

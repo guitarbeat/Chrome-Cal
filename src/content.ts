@@ -1,105 +1,135 @@
-import { CalendarEvent, Message, MessageResponse } from './types';
-import { domUtils } from './utils';
+/**
+ * @file Content Script
+ * @module content
+ * @description DOM manipulation and event handling for Google Calendar UI
+ * @author Your Name
+ * @version 1.0.0
+ */
 
-// Core utilities for DOM manipulation and event handling
-const utils = {
-  // Get selected event from calendar
-  getSelectedEvent(): CalendarEvent | null {
-    // Try multiple selectors for better compatibility
-    const selectors = [
-      '[data-eventid][aria-selected="true"]',
-      '[role="gridcell"] [role="button"][aria-selected="true"]',
-      '.Jmftzc.gVNoLb.EiZ8Dd[aria-selected="true"]'
-    ];
+import { CalendarEvent, Message, MessageResponse } from "./types";
+import type { ToggleEventGhostPayload, InitGapiPayload } from "./types";
+import { domUtils } from "./utils";
+import type { Gapi } from "./types";
 
-    let element: HTMLElement | null = null;
-    for (const selector of selectors) {
-      element = document.querySelector(selector);
-      if (element) break;
+// Add efficient DOM querying utilities
+const domSelectors = {
+  selectedEvent: [
+    '[data-eventid][aria-selected="true"]',
+    '[role="gridcell"] [role="button"][aria-selected="true"]',
+    '.Jmftzc.gVNoLb.EiZ8Dd[aria-selected="true"]',
+  ].join(","),
+
+  calendarEvents: [
+    "[data-eventid]",
+    '[role="gridcell"] [role="button"]',
+    ".Jmftzc.gVNoLb.EiZ8Dd",
+  ].join(","),
+};
+
+// Cache DOM elements
+const elementCache = new Map<string, HTMLElement>();
+const CACHE_TTL = 5000; // 5 seconds
+
+function getCachedElement(selector: string): HTMLElement | null {
+  const cached = elementCache.get(selector);
+  if (cached) return cached;
+
+  const element = document.querySelector(selector) as HTMLElement;
+  if (element) {
+    elementCache.set(selector, element);
+    setTimeout(() => elementCache.delete(selector), CACHE_TTL);
+  }
+  return element;
+}
+
+// Optimize DOM updates with requestAnimationFrame
+const batchDOMUpdates = (() => {
+  let scheduled = false;
+  const updates: (() => void)[] = [];
+
+  return (fn: () => void) => {
+    updates.push(fn);
+    if (!scheduled) {
+      scheduled = true;
+      requestAnimationFrame(() => {
+        scheduled = false;
+        const fns = [...updates];
+        updates.length = 0;
+        fns.forEach((f) => f());
+      });
     }
+  };
+})();
 
+/**
+ * Calendar event utilities
+ * @namespace utils
+ */
+const utils = {
+  /**
+   * Get currently selected calendar event
+   * @returns {CalendarEvent | null} Selected event or null
+   */
+  getSelectedEvent(): CalendarEvent | null {
+    const element = getCachedElement(domSelectors.selectedEvent);
     if (!element) return null;
 
-    // Extract event details
-    const title = element.getAttribute('title') || '';
-    const timeEl = element.querySelector('time') || element.querySelector('[data-start-time]');
-    const energyAttr = element.getAttribute('data-energy');
-    const startTime = timeEl?.getAttribute('datetime') || timeEl?.getAttribute('data-start-time') || '';
-
-    // Clean title (remove any existing energy indicators)
-    const cleanTitle = title.replace(/[🔋⚡⚖️]\s*\([+-]?\d+\)/, '').trim();
+    const title = element.getAttribute("title") || "";
+    const timeEl =
+      element.querySelector("time") ||
+      element.querySelector("[data-start-time]");
+    const startTime =
+      timeEl?.getAttribute("datetime") ||
+      timeEl?.getAttribute("data-start-time") ||
+      "";
 
     return {
-      id: element.getAttribute('data-eventid') || crypto.randomUUID(),
-      title: cleanTitle,
+      id: element.getAttribute("data-eventid") || crypto.randomUUID(),
+      title: title.trim(),
       startTime,
-      endTime: startTime, // For now, we'll use the same time
-      energy: energyAttr ? parseInt(energyAttr) : 0
+      endTime: startTime,
     };
-  },
-
-  // Update event's energy level
-  updateEventEnergy(title: string, energy: number): void {
-    // Try multiple selectors for better compatibility
-    const selectors = [
-      '[data-eventid]',
-      '[role="gridcell"] [role="button"]',
-      '.Jmftzc.gVNoLb.EiZ8Dd'
-    ];
-
-    const events: NodeListOf<HTMLElement>[] = selectors.map(
-      selector => document.querySelectorAll(selector)
-    );
-
-    events.forEach(nodeList => {
-      nodeList.forEach(event => {
-        if (!(event instanceof HTMLElement)) return;
-        
-        const eventTitle = event.getAttribute('title') || '';
-        const cleanTitle = eventTitle.replace(/[🔋⚡⚖️]\s*\([+-]?\d+\)/, '').trim();
-        
-        if (cleanTitle === title) {
-          const emoji = energy < 0 ? '🔋' : energy > 0 ? '⚡' : '⚖️';
-          const sign = energy > 0 ? '+' : '';
-          event.setAttribute('data-energy', energy.toString());
-          event.setAttribute('title', `${cleanTitle} ${emoji} (${sign}${energy})`);
-        }
-      });
-    });
   },
 
   // Apply ghosting to future events
   applyGhosting(enabled: boolean): void {
-    const now = new Date();
-    now.setHours(0, 0, 0, 0); // Start of today
+    // Get current time from calendar's current time indicator
+    const timeIndicator = document.querySelector('.rGFpCd') as HTMLElement;
+    const now = timeIndicator?.dataset?.time ? 
+      new Date(Number(timeIndicator.dataset.time)) : 
+      new Date();
 
     // Try multiple selectors for better compatibility
     const selectors = [
-      '[data-eventid]',
+      "[data-eventid]",
       '[role="gridcell"] [role="button"]',
-      '.Jmftzc.gVNoLb.EiZ8Dd'
+      ".Jmftzc.gVNoLb.EiZ8Dd",
     ];
 
-    const events: NodeListOf<HTMLElement>[] = selectors.map(
-      selector => document.querySelectorAll(selector)
+    const events: NodeListOf<HTMLElement>[] = selectors.map((selector) =>
+      document.querySelectorAll(selector),
     );
 
-    events.forEach(nodeList => {
-      nodeList.forEach(event => {
+    events.forEach((nodeList) => {
+      nodeList.forEach((event) => {
         if (!(event instanceof HTMLElement)) return;
 
         // Try to get event date
-        const timeElement = event.querySelector('time') || event.querySelector('[data-start-time]');
-        const dateStr = timeElement?.getAttribute('datetime') || timeElement?.getAttribute('data-start-time');
+        const timeElement =
+          event.querySelector("time") ||
+          event.querySelector("[data-start-time]");
+        const dateStr =
+          timeElement?.getAttribute("datetime") ||
+          timeElement?.getAttribute("data-start-time");
 
         if (dateStr) {
           const eventDate = new Date(dateStr);
           if (enabled && eventDate > now) {
-            event.style.opacity = '0.5';
-            event.style.filter = 'grayscale(50%)';
+            event.style.opacity = "0.5";
+            event.style.filter = "grayscale(50%)";
           } else {
-            event.style.opacity = '';
-            event.style.filter = '';
+            event.style.opacity = "";
+            event.style.filter = "";
           }
         }
       });
@@ -109,45 +139,77 @@ const utils = {
   // Hide morning events
   hideMorningEvents(untilTime?: string): void {
     if (!untilTime) return;
-    
-    const [hours] = untilTime.split(':').map(Number);
-    
+
+    const [hours] = untilTime.split(":").map(Number);
+
     // Try multiple selectors for better compatibility
     const selectors = [
-      '[data-eventid]',
+      "[data-eventid]",
       '[role="gridcell"] [role="button"]',
-      '.Jmftzc.gVNoLb.EiZ8Dd'
+      ".Jmftzc.gVNoLb.EiZ8Dd",
     ];
 
-    const events: NodeListOf<HTMLElement>[] = selectors.map(
-      selector => document.querySelectorAll(selector)
+    const events: NodeListOf<HTMLElement>[] = selectors.map((selector) =>
+      document.querySelectorAll(selector),
     );
 
-    events.forEach(nodeList => {
-      nodeList.forEach(event => {
+    events.forEach((nodeList) => {
+      nodeList.forEach((event) => {
         if (!(event instanceof HTMLElement)) return;
 
-        const timeElement = event.querySelector('time') || event.querySelector('[data-start-time]');
-        const dateStr = timeElement?.getAttribute('datetime') || timeElement?.getAttribute('data-start-time');
+        const timeElement =
+          event.querySelector("time") ||
+          event.querySelector("[data-start-time]");
+        const dateStr =
+          timeElement?.getAttribute("datetime") ||
+          timeElement?.getAttribute("data-start-time");
 
         if (dateStr) {
           const eventDate = new Date(dateStr);
           if (eventDate.getHours() < hours) {
-            event.style.display = 'none';
+            event.style.display = "none";
           } else {
-            event.style.display = '';
+            event.style.display = "";
           }
         }
       });
     });
-  }
+  },
+
+  // Apply ghosting to specific events by title
+  applyEventGhosting(eventTitles: string[], opacity: number): void {
+    const selectors = [
+      "[data-eventid]",
+      '[role="gridcell"] [role="button"]',
+      ".Jmftzc.gVNoLb.EiZ8Dd",
+    ];
+
+    selectors.forEach(selector => {
+      document.querySelectorAll<HTMLElement>(selector).forEach(event => {
+        const eventTitle = event.getAttribute("title")?.trim() || "";
+        
+        if (eventTitles.includes(eventTitle)) {
+          event.style.opacity = (opacity / 100).toString();
+          event.style.pointerEvents = "none";
+          event.classList.add("ghosted-event");
+        } else if (event.classList.contains("ghosted-event")) {
+          event.style.opacity = "";
+          event.style.pointerEvents = "";
+          event.classList.remove("ghosted-event");
+        }
+      });
+    });
+  },
 };
 
-// Watch for DOM changes to reapply styles
+/**
+ * MutationObserver for detecting DOM changes
+ * @type {MutationObserver}
+ */
 const observer = new MutationObserver(
   domUtils.throttle(() => {
-    // Get current state and reapply settings
-    chrome.runtime.sendMessage({ type: 'GET_STATE' }, (response) => {
+    elementCache.clear(); // Clear cache on DOM changes
+    chrome.runtime.sendMessage({ type: "GET_STATE" }, (response) => {
       if (response.success && response.data) {
         const state = response.data;
         if (state.settings.ghostFutureEvents) {
@@ -158,57 +220,115 @@ const observer = new MutationObserver(
         }
       }
     });
-  }, 1000)
+  }, 250), // Reduced from 1000ms to 250ms for better responsiveness while maintaining performance
 );
 
-// Start observing
-observer.observe(document.body, {
-  childList: true,
-  subtree: true
+// Clean up observer on page unload
+window.addEventListener("beforeunload", () => {
+  observer.disconnect();
+  elementCache.clear();
 });
 
 // Handle messages from the extension
-chrome.runtime.onMessage.addListener((message: Message, sender, sendResponse) => {
-  const response: MessageResponse = { success: true };
+chrome.runtime.onMessage.addListener(
+  (message: Message, sender, sendResponse) => {
+    const response: MessageResponse = { success: true };
 
-  try {
-    switch (message.type) {
-      case 'GET_STATE':
-        response.data = utils.getSelectedEvent();
-        break;
+    try {
+      switch (message.type) {
+        case "GET_STATE":
+          response.data = utils.getSelectedEvent();
+          break;
 
-      case 'UPDATE_EVENT':
-        utils.updateEventEnergy(message.payload.title, message.payload.energy);
-        break;
+        case "TOGGLE_GHOST":
+          if (typeof message.payload === "boolean") {
+            utils.applyGhosting(message.payload);
+          }
+          break;
 
-      case 'TOGGLE_GHOST':
-        utils.applyGhosting(message.payload);
-        break;
+        case "HIDE_MORNINGS":
+          if (
+            typeof message.payload === "string" ||
+            message.payload === undefined
+          ) {
+            utils.hideMorningEvents(message.payload);
+          }
+          break;
 
-      case 'HIDE_MORNINGS':
-        utils.hideMorningEvents(message.payload);
-        break;
+        case "TOGGLE_EVENT_GHOST": {
+          const payload = message.payload as ToggleEventGhostPayload;
+          if (payload?.titles && typeof payload.opacity === "number") {
+            utils.applyEventGhosting(payload.titles, payload.opacity);
+          }
+          break;
+        }
 
-      default:
-        response.success = false;
-        response.error = 'Unknown message type';
+        case "INIT_GAPI": {
+          const { clientId, apiKey } = message.payload as InitGapiPayload;
+          initializeGapi(clientId, apiKey)
+            .then(() => sendResponse({ success: true }))
+            .catch((error) => sendResponse({ success: false, error }));
+          return true; // Keep the channel open
+        }
+
+        default:
+          response.success = false;
+          response.error = "Unknown message type";
+      }
+    } catch (error) {
+      response.success = false;
+      response.error = error instanceof Error ? error.message : "Unknown error";
     }
-  } catch (error) {
-    response.success = false;
-    response.error = error instanceof Error ? error.message : 'Unknown error';
-  }
 
-  sendResponse(response);
-  return true;
-});
+    sendResponse(response);
+    return true;
+  },
+);
 
-// Watch for event selection
-document.addEventListener('click', () => {
+// Click listener for event selection
+document.addEventListener("click", () => {
   const event = utils.getSelectedEvent();
   if (event) {
     chrome.runtime.sendMessage({
-      type: 'UPDATE_STATE',
-      payload: { selectedEvent: event }
+      type: "UPDATE_STATE",
+      payload: { selectedEvent: event },
     });
   }
-}); 
+});
+
+declare const gapi: Gapi;
+
+async function initializeGapi(clientId: string, apiKey: string) {
+  return new Promise<void>((resolve, reject) => {
+    gapi.load("client", async () => {
+      try {
+        await gapi.client.init({
+          apiKey,
+          clientId,
+          discoveryDocs: [
+            "https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest",
+          ],
+          scope: "https://www.googleapis.com/auth/calendar.events",
+        });
+        resolve();
+      } catch (error) {
+        reject(error);
+      }
+    });
+  });
+}
+
+// Add this to the end of the file to handle initial load
+document.addEventListener('DOMContentLoaded', () => {
+  chrome.runtime.sendMessage({ type: 'GET_STATE' }, (response) => {
+    if (response.success && response.data) {
+      const state = response.data;
+      if (state.settings.ghostFutureEvents) {
+        utils.applyGhosting(true);
+      }
+      if (state.settings.hideUntilTime) {
+        utils.hideMorningEvents(state.settings.hideUntilTime);
+      }
+    }
+  });
+});

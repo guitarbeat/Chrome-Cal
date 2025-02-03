@@ -1,17 +1,18 @@
 {
   "manifest_version": 3,
   "name": "Calendar Energy Tracker",
-  "version": "1.0",
+  "version": "1.0.0",
   "description": "Track and manage your energy levels for Google Calendar events",
   "permissions": [
     "storage",
     "tabs",
     "scripting",
-    "identity"
+    "identity",
+    "activeTab"
   ],
   "host_permissions": [
-    "https://calendar.google.com/*",
-    "https://www.googleapis.com/*"
+    "https://*.googleapis.com/*",
+    "https://calendar.google.com/*"
   ],
   "oauth2": {
     "client_id": "${GOOGLE_CLIENT_ID}",
@@ -21,28 +22,23 @@
     ]
   },
   "action": {
-    "default_popup": "popup.html",
-    "default_icon": {
-      "16": "icons/icon16.png",
-      "32": "icons/icon32.png",
-      "48": "icons/icon48.png",
-      "128": "icons/icon128.png"
-    }
+    "default_popup": "static/popup.html"
   },
   "background": {
-    "service_worker": "background-bundle.js"
+    "service_worker": "static/background-bundle.js",
+    "type": "module"
   },
   "content_scripts": [
     {
       "matches": ["https://calendar.google.com/*"],
-      "js": ["content-bundle.js"],
-      "css": ["styles.css"]
+      "js": ["static/content-bundle.js"],
+      "css": ["static/styles.css"],
+      "run_at": "document_idle"
     }
   ],
-  "icons": {
-    "16": "icons/icon16.png",
-    "32": "icons/icon32.png",
-    "48": "icons/icon48.png",
-    "128": "icons/icon128.png"
-  }
+  "web_accessible_resources": [{
+    "resources": ["static/*", "popup.html", "popup.css", "popup-bundle.js"],
+    "matches": ["https://calendar.google.com/*"]
+  }],
+  "minimum_chrome_version": "88"
 } 

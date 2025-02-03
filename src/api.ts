@@ -1,8 +1,27 @@
-import { CalendarEvent } from './types';
+/**
+ * @file Google Calendar API Wrapper
+ * @module api
+ * @description Singleton class handling Google Calendar API interactions
+ * @author Your Name
+ * @version 1.0.0
+ */
 
+// No unused imports
+
+/**
+ * Main Google Calendar API class
+ * @class GoogleCalendarAPI
+ * @description Singleton class managing Google Calendar API connections
+ */
 class GoogleCalendarAPI {
   private static instance: GoogleCalendarAPI;
-  private accessToken: string | null = null;
+  private clientId?: string;
+  private apiKey?: string;
+  private isInitialized = false;
+  private initPromise?: Promise<void>;
+  private tabCache?: chrome.tabs.Tab;
+  private lastTabQuery = 0;
+  private readonly TAB_CACHE_TTL = 5000; // 5 seconds
 
   private constructor() {}
 
@@ -13,113 +32,135 @@ class GoogleCalendarAPI {
     return GoogleCalendarAPI.instance;
   }
 
-  async init(): Promise<void> {
-    try {
-      const token = await this.getAccessToken();
-      if (token) {
-        this.accessToken = token;
+  private async getCalendarTab(): Promise<chrome.tabs.Tab> {
+    const now = Date.now();
+    if (this.tabCache && now - this.lastTabQuery < this.TAB_CACHE_TTL) {
+      return this.tabCache;
+    }
+
+    const [tab] = await chrome.tabs.query({
+      url: "https://calendar.google.com/*",
+    });
+
+    this.tabCache = tab;
+    this.lastTabQuery = now;
+
+    if (!tab?.id) throw new Error("No calendar tab found");
+    return tab;
+  }
+
+  /**
+   * Initialize API connection
+   * @param clientId - OAuth2 client ID
+   * @param apiKey - Google API key
+   * @throws Error if initialization fails
+   */
+  async init(clientId: string, apiKey: string): Promise<void> {
+    // Prevent multiple simultaneous initializations
+    if (this.initPromise) return this.initPromise;
+    if (
+      this.isInitialized &&
+      this.clientId === clientId &&
+      this.apiKey === apiKey
+    ) {
+      return Promise.resolve();
+    }
+
+    this.initPromise = (async () => {
+      try {
+        const tab = await this.getCalendarTab();
+
+        await new Promise<void>((resolve, reject) => {
+          chrome.tabs.sendMessage(
+            tab.id!,
+            {
+              type: "INIT_GAPI",
+              payload: { clientId, apiKey },
+            },
+            (response) => {
+              if (response?.success) {
+                this.clientId = clientId;
+                this.apiKey = apiKey;
+                this.isInitialized = true;
+                resolve();
+              } else {
+                reject(response?.error || "GAPI initialization failed");
+              }
+            },
+          );
+        });
+      } finally {
+        this.initPromise = undefined;
       }
-    } catch (error) {
-      console.error('Failed to initialize Google Calendar API:', error);
-      throw error;
-    }
+    })();
+
+    return this.initPromise;
   }
 
-  private async getAccessToken(): Promise<string> {
+  async getToken(): Promise<string> {
     try {
-      const authResult = await chrome.identity.getAuthToken({ interactive: true });
-      if (!authResult || !authResult.token) {
-        throw new Error('Failed to get auth token');
+      const auth = await chrome.identity.getAuthToken({ interactive: true });
+      if (!auth?.token) {
+        throw new Error("Failed to get auth token");
       }
-      return authResult.token;
+      return auth.token;
     } catch (error) {
-      console.error('Failed to get auth token:', error);
-      throw error;
+      console.error("Failed to get auth token:", error);
+      throw new Error("Authentication failed. Please try again.");
     }
   }
 
-  async updateEventEnergyLevel(calendarId: string, eventId: string, title: string, energyLevel: number): Promise<void> {
-    if (!this.accessToken) {
-      await this.init();
-    }
+  async updateEventTitle(
+    calendarId: string,
+    eventId: string,
+    newTitle: string,
+  ): Promise<void> {
+    const MAX_RETRIES = 3;
+    const RETRY_DELAY = 1000;
 
-    try {
-      // First, get the current event details
-      const event = await this.getEvent(calendarId, eventId);
-      if (!event) throw new Error('Event not found');
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        const tab = await this.getCalendarTab();
 
-      // Update the event title with energy level
-      const emoji = this.getEnergyEmoji(energyLevel);
-      const sign = energyLevel > 0 ? '+' : '';
-      const energyIndicator = `${emoji} (${sign}${energyLevel})`;
-      
-      // Remove any existing energy indicators
-      const cleanTitle = title.replace(/[🔋⚡⚖️]\s*\([+-]?\d+\)/, '').trim();
-      const newTitle = `${cleanTitle} ${energyIndicator}`;
+        await new Promise<void>((resolve, reject) => {
+          chrome.tabs.sendMessage(
+            tab.id!,
+            {
+              type: "API_REQUEST",
+              payload: {
+                method: "updateEventTitle",
+                args: [calendarId, eventId, newTitle],
+              },
+            },
+            (response) => {
+              response?.success ? resolve() : reject(response?.error);
+            },
+          );
+        });
 
-      // Update the event
-      await this.updateEvent(calendarId, eventId, {
-        ...event,
-        summary: newTitle
-      });
-
-    } catch (error) {
-      console.error('Failed to update event energy level:', error);
-      throw error;
-    }
-  }
-
-  private async getEvent(calendarId: string, eventId: string): Promise<any> {
-    try {
-      const response = await fetch(
-        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${this.accessToken}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Failed to get event: ${response.statusText}`);
+        return;
+      } catch (error) {
+        if (attempt === MAX_RETRIES) throw error;
+        await new Promise((resolve) =>
+          setTimeout(resolve, RETRY_DELAY * attempt),
+        );
       }
-
-      return await response.json();
-    } catch (error) {
-      console.error('Failed to get event:', error);
-      return null;
     }
-  }
-
-  private async updateEvent(calendarId: string, eventId: string, event: any): Promise<void> {
-    try {
-      const response = await fetch(
-        `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}`,
-        {
-          method: 'PUT',
-          headers: {
-            'Authorization': `Bearer ${this.accessToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(event),
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Failed to update event: ${response.statusText}`);
-      }
-    } catch (error) {
-      console.error('Failed to update event:', error);
-      throw error;
-    }
-  }
-
-  private getEnergyEmoji(value: number): string {
-    if (value < 0) return '🔋';
-    if (value > 0) return '⚡';
-    return '⚖️';
   }
 }
 
-export const googleCalendarApi = GoogleCalendarAPI.getInstance(); 
+export const googleCalendarApi = GoogleCalendarAPI.getInstance();
+
+/**
+ * Refresh calendar data from storage
+ * @throws Error if missing API credentials
+ */
+export async function refreshCalendarData() {
+  const { clientId, apiKey } = await chrome.storage.local.get([
+    "clientId",
+    "apiKey",
+  ]);
+  if (!clientId || !apiKey) throw new Error("Missing API credentials");
+
+  await googleCalendarApi.init(clientId, apiKey);
+}

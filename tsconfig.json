@@ -14,6 +14,9 @@
     "rootDir": "src",
     "types": ["chrome"]
   },
-  "include": ["src/**/*"],
-  "exclude": ["node_modules"]
+  "include": ["src/**/*", "src/globals.d.ts"],
+  "exclude": ["node_modules"],
+  "paths": {
+    "@/*": ["./src/*"]
+  }
 } 
